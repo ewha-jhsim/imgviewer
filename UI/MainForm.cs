@@ -36,6 +36,10 @@ public sealed class MainForm : Form
         DoubleBuffered = true;
         BackColor = Color.FromArgb(32, 32, 32);
 
+        // Reuse the .exe's embedded application icon for the window/taskbar.
+        try { Icon = Icon.ExtractAssociatedIcon(Environment.ProcessPath!); }
+        catch { /* leave the default icon if extraction fails */ }
+
         _canvas.ViewChanged += (_, _) => UpdateStatus();
         Controls.Add(_canvas);
         Controls.Add(BuildMenu());
@@ -61,11 +65,17 @@ public sealed class MainForm : Form
 
     // ---- UI construction ----------------------------------------------------
 
-    private static ToolStripMenuItem Item(string text, EventHandler handler, Keys shortcut = Keys.None)
+    private static ToolStripMenuItem Item(
+        string text, EventHandler handler, Keys shortcut = Keys.None, string? shortcutText = null)
     {
         var item = new ToolStripMenuItem(text, null, handler);
+        // Note: only modifier combos, function keys, Delete and Insert are valid
+        // ShortcutKeys. Bare arrow keys would throw, so they use shortcutText (display
+        // only) and are handled in ProcessCmdKey instead.
         if (shortcut != Keys.None)
             item.ShortcutKeys = shortcut;
+        if (shortcutText is not null)
+            item.ShortcutKeyDisplayString = shortcutText;
         return item;
     }
 
@@ -84,8 +94,8 @@ public sealed class MainForm : Form
         menu.Items.Add(file);
 
         var view = new ToolStripMenuItem("&View");
-        view.DropDownItems.Add(Item("&Next image", (_, _) => Navigate(+1), Keys.Right));
-        view.DropDownItems.Add(Item("&Previous image", (_, _) => Navigate(-1), Keys.Left));
+        view.DropDownItems.Add(Item("&Next image", (_, _) => Navigate(+1), shortcutText: "→"));
+        view.DropDownItems.Add(Item("&Previous image", (_, _) => Navigate(-1), shortcutText: "←"));
         view.DropDownItems.Add(new ToolStripSeparator());
         view.DropDownItems.Add(Item("Zoom &In", (_, _) => _canvas.ZoomBy(1.25f, CanvasCenter()), Keys.Control | Keys.Oemplus));
         view.DropDownItems.Add(Item("Zoom &Out", (_, _) => _canvas.ZoomBy(0.8f, CanvasCenter()), Keys.Control | Keys.OemMinus));

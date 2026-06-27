@@ -21,6 +21,9 @@
     <!-- DPI awareness is declared in the manifest; do not also set it in code. -->
     <ApplicationManifest>app.manifest</ApplicationManifest>
 
+    <!-- Embedded into the .exe; shows in Explorer, taskbar, and the installer. -->
+    <ApplicationIcon>assets/icon.ico</ApplicationIcon>
+
     <!-- Smaller, faster single-file output. -->
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>

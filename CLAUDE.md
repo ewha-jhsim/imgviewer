@@ -58,7 +58,10 @@ the registry/network directly except through `Services`.
   (`ImageAnimator`), and the crop overlay.
 - **Keyboard navigation** is handled in `MainForm.ProcessCmdKey` (not key events) so arrow
   keys reliably drive prev/next; `Services/FolderNavigator` enumerates siblings with a
-  natural (numeric-aware) sort and wraps around.
+  natural (numeric-aware) sort and wraps around. Gotcha: a menu item's `ShortcutKeys` must
+  be a *valid* shortcut (modifier combo, function key, Delete or Insert) — assigning a bare
+  arrow key throws `InvalidEnumArgumentException` at construction. Use `ShortcutKeyDisplayString`
+  for an arrow-key hint and let `ProcessCmdKey` do the work.
 - **DPI** is set in code (`Program.cs` `SetHighDpiMode`), deliberately NOT in `app.manifest`
   (doing both triggers analyzer `WFAC010`).
 - **Crash visibility.** `Program.Main` installs global handlers that log to
