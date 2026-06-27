@@ -22,13 +22,10 @@ public sealed class ResizeDialog : Form
     private readonly double _ratio;
     private bool _syncing;
 
-    public int NewWidth => _byPercent.Checked
-        ? Math.Max(1, (int)Math.Round(_original.Width * (double)_percent.Value / 100.0))
-        : (int)_width.Value;
-
-    public int NewHeight => _byPercent.Checked
-        ? Math.Max(1, (int)Math.Round(_original.Height * (double)_percent.Value / 100.0))
-        : (int)_height.Value;
+    // In percent mode the width/height boxes are kept in sync with the percentage, so the
+    // boxes always show exactly what will be applied.
+    public int NewWidth => (int)_width.Value;
+    public int NewHeight => (int)_height.Value;
 
     public ResizeDialog(Size original)
     {
@@ -83,6 +80,7 @@ public sealed class ResizeDialog : Form
 
         _width.ValueChanged += (_, _) => SyncFromWidth();
         _height.ValueChanged += (_, _) => SyncFromHeight();
+        _percent.ValueChanged += (_, _) => SyncFromPercent();
         _byPixels.CheckedChanged += (_, _) => UpdateMode();
         _byPercent.CheckedChanged += (_, _) => UpdateMode();
         UpdateMode();
@@ -95,6 +93,21 @@ public sealed class ResizeDialog : Form
         _height.Enabled = pixels;
         _lock.Enabled = pixels;
         _percent.Enabled = !pixels;
+
+        // Entering percent mode: immediately reflect the percentage as pixel dimensions.
+        if (!pixels)
+            SyncFromPercent();
+    }
+
+    /// <summary>Recomputes the width/height boxes live from the scale percentage.</summary>
+    private void SyncFromPercent()
+    {
+        if (_syncing) return;
+        _syncing = true;
+        double pct = (double)_percent.Value / 100.0;
+        _width.Value = Math.Clamp((decimal)Math.Max(1, Math.Round(_original.Width * pct)), 1, 100000);
+        _height.Value = Math.Clamp((decimal)Math.Max(1, Math.Round(_original.Height * pct)), 1, 100000);
+        _syncing = false;
     }
 
     private void SyncFromWidth()
