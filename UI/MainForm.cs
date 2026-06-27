@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
@@ -29,6 +30,14 @@ public sealed class MainForm : Form
 
     private string? _currentPath;
     private bool _dirty;
+
+    // Edit history (resize/crop). Each list holds independent bitmap snapshots that this
+    // form owns and disposes — the canvas owns only the live image it is showing.
+    private const int MaxHistory = 20;
+    private readonly List<Bitmap> _undo = new();
+    private readonly List<Bitmap> _redo = new();
+    private ToolStripMenuItem? _undoItem;
+    private ToolStripMenuItem? _redoItem;
 
     // Fullscreen bookkeeping.
     private FormWindowState _prevState;
@@ -116,6 +125,13 @@ public sealed class MainForm : Form
         menu.Items.Add(view);
 
         var edit = new ToolStripMenuItem("&Edit");
+        _undoItem = Item("&Undo", (_, _) => Undo(), Keys.Control | Keys.Z);
+        _redoItem = Item("&Redo", (_, _) => Redo(), Keys.Control | Keys.Y);
+        _undoItem.Enabled = false;
+        _redoItem.Enabled = false;
+        edit.DropDownItems.Add(_undoItem);
+        edit.DropDownItems.Add(_redoItem);
+        edit.DropDownItems.Add(new ToolStripSeparator());
         edit.DropDownItems.Add(Item("&Resize…", (_, _) => ResizeImage()));
         edit.DropDownItems.Add(Item("&Crop", (_, _) => StartCrop(), Keys.Control | Keys.R));
         menu.Items.Add(edit);
@@ -173,6 +189,7 @@ public sealed class MainForm : Form
             _currentPath = path;
             _dirty = false;
             _navigator.Load(path);
+            ResetHistory();
             UpdateStatus();
         }
         catch (Exception ex)
@@ -197,6 +214,7 @@ public sealed class MainForm : Form
             _canvas.SetImage(image);
             _currentPath = next;
             _dirty = false;
+            ResetHistory();
             UpdateStatus();
         }
         catch (Exception ex)
@@ -230,9 +248,89 @@ public sealed class MainForm : Form
             g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
             g.DrawImage(src, new Rectangle(0, 0, dlg.NewWidth, dlg.NewHeight));
         }
-        _canvas.SetImage(resized);
+        ApplyEdit(resized);
+    }
+
+    // ---- Edit history (undo/redo) ------------------------------------------
+
+    /// <summary>Replaces the live image with an edited one, recording an undo step.</summary>
+    private void ApplyEdit(Bitmap edited)
+    {
+        Bitmap? before = SnapshotCurrent();   // independent copy of the pre-edit image
+        if (before is not null)
+            PushHistory(_undo, before);
+        ClearHistory(_redo);
+
+        _canvas.SetImage(edited);   // canvas disposes the old live image (not our snapshot)
         _dirty = true;
+        UpdateEditMenu();
         UpdateStatus();
+    }
+
+    private void Undo()
+    {
+        if (_undo.Count == 0) return;
+        Bitmap? current = SnapshotCurrent();
+        if (current is not null)
+            PushHistory(_redo, current);
+
+        Bitmap restore = Pop(_undo);
+        _canvas.SetImage(restore);  // ownership transfers to the canvas
+        _dirty = true;
+        UpdateEditMenu();
+        UpdateStatus();
+    }
+
+    private void Redo()
+    {
+        if (_redo.Count == 0) return;
+        Bitmap? current = SnapshotCurrent();
+        if (current is not null)
+            PushHistory(_undo, current);
+
+        Bitmap restore = Pop(_redo);
+        _canvas.SetImage(restore);
+        _dirty = true;
+        UpdateEditMenu();
+        UpdateStatus();
+    }
+
+    private static void PushHistory(List<Bitmap> stack, Bitmap bmp)
+    {
+        stack.Add(bmp);
+        if (stack.Count > MaxHistory)
+        {
+            stack[0].Dispose();     // drop the oldest step
+            stack.RemoveAt(0);
+        }
+    }
+
+    private static Bitmap Pop(List<Bitmap> stack)
+    {
+        Bitmap bmp = stack[^1];
+        stack.RemoveAt(stack.Count - 1);
+        return bmp;
+    }
+
+    private static void ClearHistory(List<Bitmap> stack)
+    {
+        foreach (Bitmap b in stack)
+            b.Dispose();
+        stack.Clear();
+    }
+
+    /// <summary>Discards all undo/redo history (e.g. when a different image is opened).</summary>
+    private void ResetHistory()
+    {
+        ClearHistory(_undo);
+        ClearHistory(_redo);
+        UpdateEditMenu();
+    }
+
+    private void UpdateEditMenu()
+    {
+        if (_undoItem is not null) _undoItem.Enabled = _undo.Count > 0;
+        if (_redoItem is not null) _redoItem.Enabled = _redo.Count > 0;
     }
 
     private void BuildCropBar()
@@ -278,9 +376,7 @@ public sealed class MainForm : Form
             g.DrawImage(src, new Rectangle(0, 0, rect.Width, rect.Height), rect, GraphicsUnit.Pixel);
 
         _cropBar.Visible = false;
-        _canvas.SetImage(cropped);   // also cancels the canvas crop mode
-        _dirty = true;
-        UpdateStatus();
+        ApplyEdit(cropped);   // records undo and cancels the canvas crop mode via SetImage
     }
 
     private void CancelCrop()
@@ -366,6 +462,7 @@ public sealed class MainForm : Form
             _currentPath = next;
             try { _canvas.SetImage(ImageLoader.Load(next)); } catch { _canvas.SetImage(null); }
         }
+        ResetHistory();
         UpdateStatus();
     }
 
@@ -514,6 +611,9 @@ public sealed class MainForm : Form
             case Keys.Subtract:
                 _canvas.ZoomBy(0.8f, CanvasCenter());
                 return true;
+            case Keys.Control | Keys.Shift | Keys.Z:   // common alias for Redo
+                Redo();
+                return true;
         }
         return base.ProcessCmdKey(ref msg, keyData);
     }
@@ -570,7 +670,12 @@ public sealed class MainForm : Form
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         if (_dirty && !ConfirmDiscardIfDirty())
+        {
             e.Cancel = true;
+            base.OnFormClosing(e);
+            return;
+        }
+        ResetHistory();   // dispose any retained snapshots
         base.OnFormClosing(e);
     }
 }

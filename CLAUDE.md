@@ -55,7 +55,12 @@ the registry/network directly except through `Services`.
   `canvas.SetImage(...)` — never dispose images itself. Edits (resize/crop) build a fresh
   `Bitmap` snapshot from `canvas.CurrentImage` and hand it back via `SetImage`. The canvas
   also draws the checkerboard backdrop (for PNG/WebP alpha), zoom/pan, GIF animation
-  (`ImageAnimator`), and the crop overlay.
+  (`ImageAnimator`), and the crop overlay. The checkerboard and image are drawn to the same
+  pixel-rounded rect with `WrapMode.TileFlipXY` so no checker bleeds along the edges.
+- **Undo/redo** (`MainForm`) keeps two `List<Bitmap>` stacks of *independent snapshots* that
+  the form owns and disposes; the canvas owns only the live image. All edits funnel through
+  `ApplyEdit`, which snapshots the pre-edit image before `SetImage`. History resets whenever
+  a different file is loaded.
 - **Keyboard navigation** is handled in `MainForm.ProcessCmdKey` (not key events) so arrow
   keys reliably drive prev/next; `Services/FolderNavigator` enumerates siblings with a
   natural (numeric-aware) sort and wraps around. Gotcha: a menu item's `ShortcutKeys` must

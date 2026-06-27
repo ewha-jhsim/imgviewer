@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.Windows.Forms;
 
 namespace ImgViewer.UI;
@@ -286,19 +287,24 @@ public sealed class ImageCanvas : Control
         if (_animating)
             ImageAnimator.UpdateFrames(_image);
 
-        RectangleF dest = GetImageRect();
+        // Snap to whole pixels so the checkerboard and the image cover the exact same
+        // rectangle (a float mismatch left a thin checker strip on the right/bottom).
+        Rectangle dest = Rectangle.Round(GetImageRect());
 
-        // Checkerboard only behind the image so transparency reads clearly.
+        // Checkerboard behind the image so transparency reads clearly.
         EnsureChecker();
-        Region old = g.Clip;
-        g.SetClip(dest);
         g.FillRectangle(_checker!, dest);
-        g.Clip = old;
 
         g.InterpolationMode = _zoom >= 1f ? InterpolationMode.NearestNeighbor : InterpolationMode.HighQualityBicubic;
         g.PixelOffsetMode = PixelOffsetMode.HighQuality;
         g.CompositingMode = CompositingMode.SourceOver;
-        g.DrawImage(_image, dest);
+        // TileFlipXY stops the scaler from sampling past the edges, which otherwise
+        // leaves a faint semi-transparent line that lets the checker show through.
+        using (var attrs = new ImageAttributes())
+        {
+            attrs.SetWrapMode(WrapMode.TileFlipXY);
+            g.DrawImage(_image, dest, 0, 0, _image.Width, _image.Height, GraphicsUnit.Pixel, attrs);
+        }
 
         if (_cropMode)
             DrawCropOverlay(g, dest);
