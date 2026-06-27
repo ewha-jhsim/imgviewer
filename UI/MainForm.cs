@@ -180,7 +180,7 @@ public sealed class MainForm : Form
 
     private void OpenPath(string path)
     {
-        if (!ConfirmDiscardIfDirty())
+        if (!ConfirmSaveIfDirty())
             return;
         try
         {
@@ -203,7 +203,7 @@ public sealed class MainForm : Form
     {
         if (_canvas.CropMode) { CancelCrop(); return; }
         if (_navigator.Count == 0) return;
-        if (!ConfirmDiscardIfDirty()) return;
+        if (!ConfirmSaveIfDirty()) return;
 
         string? next = delta > 0 ? _navigator.MoveNext() : _navigator.MovePrevious();
         if (next is null) return;
@@ -388,30 +388,30 @@ public sealed class MainForm : Form
 
     // ---- Save / delete ------------------------------------------------------
 
-    private void Save()
+    /// <summary>Saves the current image. Returns true only if a save actually completed.</summary>
+    private bool Save()
     {
-        if (_currentPath is null) { SaveAs(); return; }
-        if (!ImageSaver.CanSave(_currentPath)) { SaveAs(); return; }
-        SaveTo(_currentPath);
+        if (_currentPath is null || !ImageSaver.CanSave(_currentPath))
+            return SaveAs();
+        return SaveTo(_currentPath);
     }
 
-    private void SaveAs()
+    private bool SaveAs()
     {
-        if (!_canvas.HasImage) return;
+        if (!_canvas.HasImage) return false;
         using var dlg = new SaveFileDialog
         {
             Title = "Save image as",
             Filter = "PNG (*.png)|*.png|JPEG (*.jpg)|*.jpg|WebP (*.webp)|*.webp|BMP (*.bmp)|*.bmp|GIF (*.gif)|*.gif|TIFF (*.tif)|*.tif",
             FileName = _currentPath is null ? "image.png" : Path.GetFileName(_currentPath),
         };
-        if (dlg.ShowDialog(this) == DialogResult.OK)
-            SaveTo(dlg.FileName);
+        return dlg.ShowDialog(this) == DialogResult.OK && SaveTo(dlg.FileName);
     }
 
-    private void SaveTo(string path)
+    private bool SaveTo(string path)
     {
         using Bitmap? snapshot = SnapshotCurrent();
-        if (snapshot is null) return;
+        if (snapshot is null) return false;
         try
         {
             ImageSaver.Save(snapshot, path);
@@ -420,11 +420,13 @@ public sealed class MainForm : Form
             _navigator.Refresh();
             UpdateStatus();
             _statusInfo.Text = "Saved";
+            return true;
         }
         catch (Exception ex)
         {
             MessageBox.Show(this, $"Could not save:\n{ex.Message}",
                 "ImgViewer", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
         }
     }
 
@@ -637,13 +639,25 @@ public sealed class MainForm : Form
 
     // ---- Helpers ------------------------------------------------------------
 
-    private bool ConfirmDiscardIfDirty()
+    /// <summary>
+    /// If there are unsaved edits, offers to save them. Returns true if the caller may
+    /// proceed (saved or intentionally discarded) or false if the user cancelled.
+    /// </summary>
+    private bool ConfirmSaveIfDirty()
     {
         if (!_dirty) return true;
+
+        string name = _currentPath is null ? "this image" : Path.GetFileName(_currentPath);
         DialogResult r = MessageBox.Show(this,
-            "You have unsaved edits. Discard them?", "ImgViewer",
-            MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-        return r == DialogResult.Yes;
+            $"Save changes to {name}?", "ImgViewer",
+            MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning);
+
+        return r switch
+        {
+            DialogResult.Yes => Save(),   // proceed only if the save actually completes
+            DialogResult.No => true,      // discard changes
+            _ => false,                   // Cancel (or dialog closed) — abort
+        };
     }
 
     private void UpdateStatus()
@@ -669,7 +683,7 @@ public sealed class MainForm : Form
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
-        if (_dirty && !ConfirmDiscardIfDirty())
+        if (_dirty && !ConfirmSaveIfDirty())
         {
             e.Cancel = true;
             base.OnFormClosing(e);
