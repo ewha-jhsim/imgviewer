@@ -180,7 +180,7 @@ public sealed class ImageCanvas : Control
             _panning = true;
             _panStart = e.Location;
             _panOrigin = _pan;
-            Cursor = Cursors.SizeAll;
+            Cursor = Cursors.Hand;
         }
     }
 
@@ -219,7 +219,8 @@ public sealed class ImageCanvas : Control
         base.OnMouseWheel(e);
         if (_image is null) return;
         float factor = e.Delta > 0 ? 1.15f : 1f / 1.15f;
-        ZoomBy(factor, e.Location);
+        // Always zoom about the centre of the view (not the cursor).
+        ZoomBy(factor, new Point(ClientSize.Width / 2, ClientSize.Height / 2));
     }
 
     protected override void OnMouseDoubleClick(MouseEventArgs e)

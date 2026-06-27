@@ -18,6 +18,15 @@ public sealed class MainForm : Form
     private readonly ToolStripStatusLabel _statusInfo = new();
     private readonly ToolStripStatusLabel _statusPos = new();
 
+    // Action bar shown only while cropping (gives a clickable Apply/Cancel).
+    // Uses the default (light) ToolStrip rendering so its text stays readable.
+    private readonly ToolStrip _cropBar = new()
+    {
+        Visible = false,
+        Dock = DockStyle.Top,
+        GripStyle = ToolStripGripStyle.Hidden,
+    };
+
     private string? _currentPath;
     private bool _dirty;
 
@@ -42,6 +51,8 @@ public sealed class MainForm : Form
 
         _canvas.ViewChanged += (_, _) => UpdateStatus();
         Controls.Add(_canvas);
+        BuildCropBar();
+        Controls.Add(_cropBar);   // added before the menu so the menu stays on top
         Controls.Add(BuildMenu());
         BuildStatusBar();
 
@@ -127,6 +138,11 @@ public sealed class MainForm : Form
     {
         _status.Items.AddRange(new ToolStripItem[] { _statusName, _statusInfo, _statusPos });
         _status.SizingGrip = false;
+        // Force readable colours (the default dark form theme made the text invisible).
+        _status.BackColor = Color.FromArgb(45, 45, 48);
+        _status.ForeColor = Color.Gainsboro;
+        foreach (ToolStripStatusLabel label in new[] { _statusName, _statusInfo, _statusPos })
+            label.ForeColor = Color.Gainsboro;
         Controls.Add(_status);
     }
 
@@ -168,7 +184,7 @@ public sealed class MainForm : Form
 
     private void Navigate(int delta)
     {
-        if (_canvas.CropMode) { _canvas.CancelCrop(); UpdateStatus(); return; }
+        if (_canvas.CropMode) { CancelCrop(); return; }
         if (_navigator.Count == 0) return;
         if (!ConfirmDiscardIfDirty()) return;
 
@@ -219,19 +235,40 @@ public sealed class MainForm : Form
         UpdateStatus();
     }
 
+    private void BuildCropBar()
+    {
+        var hint = new ToolStripLabel("Crop — drag a region, then:");
+        var apply = new ToolStripButton("✓ Apply (Enter)")
+        {
+            DisplayStyle = ToolStripItemDisplayStyle.Text,
+        };
+        apply.Click += (_, _) => ApplyCrop();
+        var cancel = new ToolStripButton("✕ Cancel (Esc)")
+        {
+            DisplayStyle = ToolStripItemDisplayStyle.Text,
+        };
+        cancel.Click += (_, _) => CancelCrop();
+
+        _cropBar.Items.Add(hint);
+        _cropBar.Items.Add(new ToolStripSeparator());
+        _cropBar.Items.Add(apply);
+        _cropBar.Items.Add(cancel);
+    }
+
     private void StartCrop()
     {
         if (!_canvas.HasImage) return;
         _canvas.BeginCrop();
-        _statusInfo.Text = "Crop: drag a region, Enter to apply, Esc to cancel";
+        _cropBar.Visible = true;
+        _statusInfo.Text = "Crop: drag a region, then click Apply (or press Enter).";
     }
 
     private void ApplyCrop()
     {
         if (_canvas.GetCropRectangleInImage() is not { } rect)
         {
-            _canvas.CancelCrop();
-            UpdateStatus();
+            // No usable selection yet — stay in crop mode so the user can drag one.
+            _statusInfo.Text = "Drag a region to crop first, then Apply.";
             return;
         }
 
@@ -240,8 +277,16 @@ public sealed class MainForm : Form
         using (Graphics g = Graphics.FromImage(cropped))
             g.DrawImage(src, new Rectangle(0, 0, rect.Width, rect.Height), rect, GraphicsUnit.Pixel);
 
-        _canvas.SetImage(cropped);
+        _cropBar.Visible = false;
+        _canvas.SetImage(cropped);   // also cancels the canvas crop mode
         _dirty = true;
+        UpdateStatus();
+    }
+
+    private void CancelCrop()
+    {
+        _cropBar.Visible = false;
+        _canvas.CancelCrop();
         UpdateStatus();
     }
 
@@ -458,7 +503,7 @@ public sealed class MainForm : Form
                 if (_canvas.CropMode) { ApplyCrop(); return true; }
                 break;
             case Keys.Escape:
-                if (_canvas.CropMode) { _canvas.CancelCrop(); UpdateStatus(); return true; }
+                if (_canvas.CropMode) { CancelCrop(); return true; }
                 if (_fullscreen) { ToggleFullscreen(); return true; }
                 break;
             case Keys.Oemplus:
