@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!-- Lets WinForms compile on Linux/macOS (cross-build to Windows). -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+
+    <AssemblyName>ImgViewer</AssemblyName>
+    <RootNamespace>ImgViewer</RootNamespace>
+    <Product>ImgViewer</Product>
+    <Version>1.0.0</Version>
+    <Company>ImgViewer</Company>
+
+    <!-- DPI awareness is declared in the manifest; do not also set it in code. -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <!-- Smaller, faster single-file output. -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Pure-managed WebP (and fallback) decoder; no native codec needed. -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.*" />
+  </ItemGroup>
+
+</Project>
