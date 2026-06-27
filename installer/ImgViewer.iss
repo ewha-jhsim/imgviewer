@@ -60,4 +60,5 @@ Filename: "{app}\{#MyAppExe}"; Parameters: "--register"; Tasks: associate; Flags
 Filename: "{app}\{#MyAppExe}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
-Filename: "{app}\{#MyAppExe}"; Parameters: "--unregister"; Flags: runasoriginaluser runhidden; RunOnceId: "UnregisterAssoc"
+; ([UninstallRun] doesn't allow runasoriginaluser; the uninstaller runs elevated.)
+Filename: "{app}\{#MyAppExe}"; Parameters: "--unregister"; Flags: runhidden; RunOnceId: "UnregisterAssoc"
