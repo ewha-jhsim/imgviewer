@@ -111,7 +111,6 @@ public sealed class MainForm : Form
         file.DropDownItems.Add(Item("Save &As…", (_, _) => SaveAs(), Keys.Control | Keys.Shift | Keys.S));
         file.DropDownItems.Add(new ToolStripSeparator());
         file.DropDownItems.Add(Item("&Print…", (_, _) => PrintImage(), Keys.Control | Keys.P));
-        file.DropDownItems.Add(Item("Print Pre&view…", (_, _) => PrintPreview()));
         file.DropDownItems.Add(new ToolStripSeparator());
         file.DropDownItems.Add(Item("&Delete file", (_, _) => DeleteCurrent(), Keys.Delete));
         file.DropDownItems.Add(new ToolStripSeparator());
@@ -468,43 +467,14 @@ public sealed class MainForm : Form
     private void PrintImage()
     {
         if (!_canvas.HasImage) return;
-        // Snapshot stays alive for the whole synchronous Print() call below.
+        // Snapshot stays alive for the whole lifetime of the print dialog (preview renders
+        // repeatedly and Print() may be invoked more than once before it closes).
         using Bitmap? snapshot = SnapshotCurrent();
         if (snapshot is null) return;
 
         using PrintDocument doc = CreatePrintDocument(snapshot);
-        using var dlg = new PrintDialog { Document = doc, UseEXDialog = true, AllowSomePages = true };
-        if (dlg.ShowDialog(this) != DialogResult.OK) return;
-
-        try
-        {
-            doc.Print();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, $"Could not print:\n{ex.Message}",
-                "ImgViewer", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        }
-    }
-
-    private void PrintPreview()
-    {
-        if (!_canvas.HasImage) return;
-        using Bitmap? snapshot = SnapshotCurrent();
-        if (snapshot is null) return;
-
-        using PrintDocument doc = CreatePrintDocument(snapshot);
-        using var preview = new PrintPreviewDialog
-        {
-            Document = doc,
-            UseAntiAlias = true,
-            Width = 900,
-            Height = 700,
-            StartPosition = FormStartPosition.CenterParent,
-        };
-        if (preview.Icon is null && Icon is not null)
-            preview.Icon = Icon;
-        preview.ShowDialog(this);
+        using var dlg = new PrintForm(doc) { Icon = Icon };
+        dlg.ShowDialog(this);
     }
 
     private void DeleteCurrent()
