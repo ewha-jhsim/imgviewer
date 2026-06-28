@@ -9,7 +9,8 @@ A lightweight Windows image viewer built with C# / WinForms (.NET 8).
 - **Transparency:** PNG/WebP alpha is shown over a checkerboard backdrop.
 - **Folder navigation:** `←` / `→` move to the previous/next image in the same folder (natural sort, wraps around).
 - **Zoom & pan:** mouse wheel to zoom at the cursor, drag to pan, double-click to toggle fit/100%.
-- **Editing:** Resize (with aspect lock) and Crop (drag a region, `Enter` to apply). Save back to any supported format.
+- **Editing:** Resize (pixels or percent, with aspect lock), Crop (drag a region, Apply), and undo/redo. Save back to any supported format.
+- **Printing:** Print and Print Preview (fits the page, keeps aspect ratio).
 - **Default app:** register ImgViewer as an image handler and open Windows' Default Apps page (`Tools ▸ Set as default image viewer…`).
 - **Auto-update:** checks a remote JSON manifest on launch and via `Help ▸ Check for updates…`; downloads and self-replaces the exe.
 
@@ -25,6 +26,8 @@ A lightweight Windows image viewer built with C# / WinForms (.NET 8).
 | `Ctrl`+`+` / `Ctrl`+`-` | Zoom in / out |
 | `Ctrl`+`R` | Crop (then `Enter` to apply, `Esc` to cancel) |
 | `Ctrl`+`O` / `Ctrl`+`S` / `Ctrl`+`Shift`+`S` | Open / Save / Save As |
+| `Ctrl`+`P` | Print |
+| `Ctrl`+`Z` / `Ctrl`+`Y` | Undo / Redo |
 | `Delete` | Send current file to Recycle Bin |
 | `F11` / `Esc` | Toggle / exit fullscreen |
 

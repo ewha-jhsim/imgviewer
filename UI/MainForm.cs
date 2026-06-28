@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
+using System.Drawing.Printing;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -107,6 +109,9 @@ public sealed class MainForm : Form
         file.DropDownItems.Add(Item("&Open…", (_, _) => OpenWithDialog(), Keys.Control | Keys.O));
         file.DropDownItems.Add(Item("&Save", (_, _) => Save(), Keys.Control | Keys.S));
         file.DropDownItems.Add(Item("Save &As…", (_, _) => SaveAs(), Keys.Control | Keys.Shift | Keys.S));
+        file.DropDownItems.Add(new ToolStripSeparator());
+        file.DropDownItems.Add(Item("&Print…", (_, _) => PrintImage(), Keys.Control | Keys.P));
+        file.DropDownItems.Add(Item("Print Pre&view…", (_, _) => PrintPreview()));
         file.DropDownItems.Add(new ToolStripSeparator());
         file.DropDownItems.Add(Item("&Delete file", (_, _) => DeleteCurrent(), Keys.Delete));
         file.DropDownItems.Add(new ToolStripSeparator());
@@ -430,6 +435,78 @@ public sealed class MainForm : Form
         }
     }
 
+    // ---- Printing -----------------------------------------------------------
+
+    private PrintDocument CreatePrintDocument(Image image)
+    {
+        var doc = new PrintDocument
+        {
+            DocumentName = _currentPath is null ? "ImgViewer image" : Path.GetFileName(_currentPath),
+        };
+        doc.PrintPage += (_, e) => DrawForPrint(e, image);
+        return doc;
+    }
+
+    /// <summary>Scales the image to fit the printable area (margins), centered, aspect kept.</summary>
+    private static void DrawForPrint(PrintPageEventArgs e, Image image)
+    {
+        Graphics g = e.Graphics!;
+        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+        Rectangle area = e.MarginBounds;
+        double scale = Math.Min((double)area.Width / image.Width, (double)area.Height / image.Height);
+        int w = Math.Max(1, (int)Math.Round(image.Width * scale));
+        int h = Math.Max(1, (int)Math.Round(image.Height * scale));
+        int x = area.X + (area.Width - w) / 2;
+        int y = area.Y + (area.Height - h) / 2;
+
+        g.DrawImage(image, new Rectangle(x, y, w, h));
+        e.HasMorePages = false;
+    }
+
+    private void PrintImage()
+    {
+        if (!_canvas.HasImage) return;
+        // Snapshot stays alive for the whole synchronous Print() call below.
+        using Bitmap? snapshot = SnapshotCurrent();
+        if (snapshot is null) return;
+
+        using PrintDocument doc = CreatePrintDocument(snapshot);
+        using var dlg = new PrintDialog { Document = doc, UseEXDialog = true, AllowSomePages = true };
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+        try
+        {
+            doc.Print();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Could not print:\n{ex.Message}",
+                "ImgViewer", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private void PrintPreview()
+    {
+        if (!_canvas.HasImage) return;
+        using Bitmap? snapshot = SnapshotCurrent();
+        if (snapshot is null) return;
+
+        using PrintDocument doc = CreatePrintDocument(snapshot);
+        using var preview = new PrintPreviewDialog
+        {
+            Document = doc,
+            UseAntiAlias = true,
+            Width = 900,
+            Height = 700,
+            StartPosition = FormStartPosition.CenterParent,
+        };
+        if (preview.Icon is null && Icon is not null)
+            preview.Icon = Icon;
+        preview.ShowDialog(this);
+    }
+
     private void DeleteCurrent()
     {
         if (_currentPath is null || !File.Exists(_currentPath)) return;
@@ -554,7 +631,8 @@ public sealed class MainForm : Form
             "Formats: PNG, JPG, GIF, BMP, WebP, TIFF, ICO.\n\n" +
             "Left/Right: previous/next image\n" +
             "Mouse wheel: zoom, drag: pan, double-click: fit/100%\n" +
-            "Ctrl+0: fit, Ctrl+1: actual size, F11: fullscreen",
+            "Ctrl+0: fit, Ctrl+1: actual size, F11: fullscreen\n" +
+            "Ctrl+P: print, Ctrl+Z/Ctrl+Y: undo/redo",
             "About ImgViewer", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
